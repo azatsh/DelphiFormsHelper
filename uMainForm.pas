@@ -126,7 +126,11 @@ begin
   for k := i+1 to DfmStrings.Count - 1 do
     if Pos('  end', DfmStrings.Strings[k]) = 1 then
       Break;
-  DfmStrings.Insert(k, 'object btnExtract: TButton'#13#10'Top = 0'#13#10'Caption = #1055#1086#1082#1072#1079#1072#1090#1100'#13#10'end');
+  DfmStrings.Insert(k, 'object btnExtract: TButton'#13#10 +
+                       'Top = 0'#13#10 +
+                       'Caption = #1055#1086#1082#1072#1079#1072#1090#1100'#13#10 +
+                       'OnClick = btnExtractClick'
+                       'end');
 
   SrcStrings.SaveToFile(FileName + '.pas');
   DfmStrings.SaveToFile(FileName + '.dfm');
