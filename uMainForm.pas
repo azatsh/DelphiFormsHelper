@@ -4,27 +4,54 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls, ComCtrls, ShellAPI;
+  Dialogs, FileCtrl, StdCtrls, ExtCtrls, Menus, ComCtrls,
+  Grids, AdvObj, BaseGrid, AdvGrid, ShellAPI, TreeList, Buttons,
+  ActnList, AdvMenus, ToolWin;
 
 type
+
   TMainForm = class(TForm)
-    edProject: TEdit;
-    Label1: TLabel;
-    btnOpenProject: TButton;
+    OpenDialog: TOpenDialog;
+    TreeList: TTreeList;
+    edtFilter: TLabeledEdit;
+    btnApply: TSpeedButton;
+    chbAutoApply: TCheckBox;
+    ActionList: TActionList;
+    actApplyFilter: TAction;
+    actExecuteFile: TAction;
+    actAutoApply: TAction;
+    MainMenu: TMainMenu;
+    N1: TMenuItem;
+    ToolBar: TToolBar;
+    Open1: TMenuItem;
+    actOpenProject: TAction;
+    Settings1: TMenuItem;
     StatusBar: TStatusBar;
-    btnGo: TButton;
-    Edit1: TEdit;
-    Edit2: TEdit;
-    procedure btnOpenProjectClick(Sender: TObject);
-    procedure btnGoClick(Sender: TObject);
-    procedure Edit1KeyUp(Sender: TObject; var Key: Word;
-      Shift: TShiftState);
+    PopupMenu: TPopupMenu;
+    Open2: TMenuItem;
+    View1: TMenuItem;
+    actShowAbout: TAction;
+    About1: TMenuItem;
+    About2: TMenuItem;
+    procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
+    procedure actApplyFilterExecute(Sender: TObject);
+    procedure actExecuteFileExecute(Sender: TObject);
+    procedure actAutoApplyExecute(Sender: TObject);
+    procedure edtFilterChange(Sender: TObject);
+    procedure actOpenProjectExecute(Sender: TObject);
+    procedure actShowAboutExecute(Sender: TObject);
   private
-    { Private declarations }
+    FProjectRootDir: string;
+    FProjects: TList;
+  protected
+    procedure ParseBPGFile(aFileName: string; out aProjectsFiles: TStrings);
+    procedure ParseProjectFile(aFileName: string; out aFiles: TStrings);
+    procedure OpenBPG(aFileName: string);
+
+    procedure BuildTree();
   public
-    function CheckRootDir(Dir: string): Boolean;
-    function Path(Dir: string): Boolean;
-    function Compile(Dir: string): Boolean;
+
   end;
 
 var
@@ -35,168 +62,333 @@ implementation
 {$R *.dfm}
 
 uses
-  uSelectDirectoryBox;
+  IniFiles,
+  ProjectInfo,
+  AboutForm;
 
-procedure TMainForm.btnOpenProjectClick(Sender: TObject);
+procedure Split(aStr: string; aDelimiter: Char; out aWords: TStrings);
+var
+  Strings: TStrings;
+begin
+  Strings := TStringList.Create();
+  try
+    Strings.Delimiter := aDelimiter;
+    Strings.DelimitedText := aStr;
+    aWords.AddStrings(Strings);
+  finally
+    Strings.Free();
+  end;
+end;
+
+procedure TMainForm.ParseBPGFile(aFileName: string; out aProjectsFiles: TStrings);
+var
+  i, k: Integer;
+  Str, Name, Value: string;
+  Found: Boolean;
+  FileStrings,
+  Projects,
+  ProjectsFiles: TStrings;
+begin
+  FileStrings := TStringList.Create();
+  Projects := TStringList.Create();
+  ProjectsFiles := THashedStringList.Create();
+  try
+    FileStrings.LoadFromFile(aFileName);
+    i := 0;
+    Found := False;
+    while (not Found) and (i < FileStrings.Count) do
+    begin
+      Str := FileStrings.Strings[i];
+      Found := (Pos('PROJECTS =', Str) > 0);
+      Inc(i);
+    end;
+
+    if not Found then Exit;
+
+    Dec(i);
+    while (i < FileStrings.Count) do
+    begin
+      Str := FileStrings.Strings[i];
+      if (Str[1] = '#') then
+        Break;
+      Split(Str, ' ', Projects);
+      Inc(i);
+    end;
+
+    k := 0;
+    while (k < Projects.Count) do
+    begin
+      Str := ExtractFileExt(Projects.Strings[k]);
+      if (Str <> '.bpl') and (Str <> '.ocx') and (Str <> '.exe') and (Str <> '.dll') then
+        Projects.Delete(k)
+      else
+        Inc(k);
+    end;
+
+    ProjectsFiles.NameValueSeparator := ':';
+    while (i < FileStrings.Count) do
+    begin
+      ProjectsFiles.Add(FileStrings.Strings[i]);
+      Inc(i);
+    end;
+
+    aProjectsFiles.Clear();
+    aProjectsFiles.NameValueSeparator := ';';
+    for i := 0 to Projects.Count - 1 do
+    begin
+      Name := Projects.Strings[i];
+      Value := Trim(ProjectsFiles.Values[Name]);
+      if (Value <> '') then
+        aProjectsFiles.Add(Name + ';' + Value);
+    end;
+
+  finally
+    ProjectsFiles.Free();
+    Projects.Free();
+    FileStrings.Free();
+  end;
+end;
+
+procedure TMainForm.ParseProjectFile(aFileName: string; out aFiles: TStrings);
+var
+  i, k: Integer;
+  Str, Ext, Text,
+  Name, FileName, FormName: string;
+  Found: Boolean;
+  FileStrings,
+  Files,
+  Words: TStrings;
+begin
+  aFiles.Clear();
+  aFiles.NameValueSeparator := ';';
+
+  Ext := ExtractFileExt(aFileName);
+  if (Ext = '.dpk') then
+    Text := 'contains'
+  else
+  if (Ext = '.dpr') then
+    Text := 'uses'
+  else
+    Exit;
+
+  FileStrings := TStringList.Create();
+  Files := TStringList.Create();
+  Words := TStringList.Create();
+  try
+    FileStrings.LoadFromFile(aFileName);
+    i := 0;
+    Found := False;
+    while (not Found) and (i < FileStrings.Count) do
+    begin
+      Str := FileStrings.Strings[i];
+      Found := (Pos(Text, Str) > 0);
+      Inc(i);
+    end;
+
+    if (not Found) then Exit;
+
+    while (i < FileStrings.Count) do
+    begin
+      Str := Trim(FileStrings.Strings[i]);
+      Files.StrictDelimiter := True;
+      Files.CommaText := Str;
+      for k := 0 to Files.Count - 1 do
+      begin
+        Name := '';
+        FileName := '';
+        FormName := '';
+        Words.Clear();
+        Split(Files.Strings[k], ' ', Words);
+        if (Words.Count > 0) then
+        begin
+          Name := Words.Strings[0];
+          if (Words.Count > 2) and (Words.Strings[1] = 'in') then
+          begin
+            FileName := Words.Strings[2];
+            FileName := Copy(FileName, 2, Length(FileName) - 2);
+          end;
+          if (Words.Count > 3) then
+          begin
+            FormName := Words.Strings[3];
+            if (FormName[1] = '{') then
+              FormName := Copy(FormName, 2, Length(FormName) - 2)
+            else
+              FormName := '';
+          end;
+        end;
+
+        if (Name <> '') then
+          aFiles.Add(Name + ';' + FileName + ';' + FormName);
+      end;
+
+      if (Str[Length(Str)] = ';') then
+        Break;
+
+      Inc(i);
+    end;
+  finally
+    Words.Free();
+    Files.Free();
+    FileStrings.Free();
+  end;
+end;
+
+procedure TMainForm.OpenBPG(aFileName: string);
 var
   i: Integer;
-  Dir: string;
+  Files,
+  ProjectsFiles: TStrings;
+  Name, Value: string;
+  Project: TProjectInfo;
 begin
-  if GetFolderDialog(Application.Handle, '', Dir) then
-  begin
-    if Dir[Length(Dir)] <> '\' then
-      Dir := Dir + '\';
-    if not CheckRootDir(Dir) then
-      ShowMessage('¬ выбранной директории не найден проект')
-    else
+  FProjectRootDir := ExtractFilePath(aFileName);
+  FProjects.Clear();
+
+  Files := TStringList.Create();
+  ProjectsFiles := THashedStringList.Create();
+  try
+    ParseBPGFile(aFileName, ProjectsFiles);
+    for i := 0 to ProjectsFiles.Count - 1 do
     begin
-      edProject.Text := Dir;
+      Name := ProjectsFiles.Names[i];
+      Value := ProjectsFiles.Values[Name];
+      if (Value = '') then
+        Continue;
+      if (Value[2] <> ':') then
+        Value := FProjectRootDir + Value;
+
+      Files.Clear();
+      ParseProjectFile(Value, Files);
+
+      Project := TProjectInfo.Create(Name, Value, Files);
+      FProjects.Add(Project);
+    end;
+  finally
+    ProjectsFiles.Free();
+    Files.Free();
+  end;
+end;
+
+procedure TMainForm.BuildTree();
+  procedure AddProjectToTree(aProject: TProjectInfo);
+  var
+    i: Integer;
+    ProjectNode,
+    FileNode: TTreeNode;
+  begin
+    if (aProject.Count = 0) then Exit;
+
+    ProjectNode := TreeList.Items.AddChild(nil, aProject.ProjectName);
+    ProjectNode.Data := aProject;
+    for i := 0 to aProject.Count - 1 do
+    begin
+      FileNode := TreeList.Items.AddChild(ProjectNode, aProject.UnitName[i]);
+      TreeList.SetNodeColumn(FileNode, 1, aProject.FileName[i]);
+      TreeList.SetNodeColumn(FileNode, 2, aProject.FormName[i]);
+      TreeList.SetNodeColumn(FileNode, 3, aProject.FormCaption[i]);
     end;
   end;
-end;
 
-function TMainForm.CheckRootDir(Dir: string): Boolean;
-begin
-  Result := DirectoryExists(Dir + '.git') and DirectoryExists(Dir + '.compile');
-end;
-
-function TMainForm.Path(Dir: string): Boolean;
-const
-  CHARS = ['A'..'Z','a'..'z','0'..'9',' '];
-var
-  i,k,m: Integer;
-  str: string;
-  FileName: string;
-  FormType: string;
-  ProcName: string;
-  Params: string;
-  SrcStrings, DfmStrings: TStrings;
-begin
-  Result := False;
-
-  FileName := Dir + 'kernel\client\ClientPack\StdDocList_Form';
-  if not (FileExists(FileName + '.pas') and FileExists(FileName + '.dfm')) then
-    Exit;
-
-  SrcStrings := TStringList.Create;
-  DfmStrings := TStringList.Create;
-  SrcStrings.LoadFromFile(FileName + '.pas');
-  DfmStrings.LoadFromFile(FileName + '.dfm');
-
-  for i := 0 to SrcStrings.Count - 1 do
-    if Pos('uses', SrcStrings.Strings[i]) > 0 then
-      Break;
-  SrcStrings.Insert(i+1, 'uDocInfo, uInfoForm,');
-
-  str := DfmStrings.Strings[0];
-  i := Pos(':', str);
-  if i > 0 then
-    FormType := Trim(Copy(str, i+1, Length(str)-i))
-  else
-    Exit;
-
-  for i := 0 to SrcStrings.Count - 1 do
-    if Pos(FormType, SrcStrings.Strings[i]) > 0 then
-      Break;
-  SrcStrings.Insert(i+1, 'btnExtract: TButton;');
-  for k := i+2 to SrcStrings.Count - 1 do
-  begin
-    str := SrcStrings.Strings[k];
-    i := Pos('procedure ', str);
-    if i <= 0 then
-      i := Pos('function ', str);
-    if i > 0 then
-      Break;
-  end;
-  SrcStrings.Insert(k, 'procedure btnExtractClick(Sender: TObject);');
-  for m := i+8 to Length(str) do
-    if not (str[m] in CHARS) then
-      Break;
-  ProcName := Trim(Copy(str, i+9, m - (i+9)));
-
-  for i := k to SrcStrings.Count - 1 do
-    if Pos(FormType + '.' + ProcName, SrcStrings.Strings[i]) > 0 then
-      Break;
-  str := 'procedure ' + FormType + '.btnExtractClick(Sender: TObject);'#13#10'{$I ExtractProcTemplate.pas}';
-  SrcStrings.Insert(i, str);
-
-  for i := 1 to DfmStrings.Count - 1 do
-    if Pos('TToolBar', DfmStrings.Strings[i]) > 0 then
-      Break;
-  for k := i+1 to DfmStrings.Count - 1 do
-    if Pos('  end', DfmStrings.Strings[k]) = 1 then
-      Break;
-  DfmStrings.Insert(k, 'object btnExtract: TButton'#13#10 +
-                       'Top = 0'#13#10 +
-                       'Caption = #1055#1086#1082#1072#1079#1072#1090#1100'#13#10 +
-                       'OnClick = btnExtractClick'
-                       'end');
-
-  SrcStrings.SaveToFile(FileName + '.pas');
-  DfmStrings.SaveToFile(FileName + '.dfm');
-
-  SrcStrings.Free;
-  DfmStrings.Free;
-
-  CopyFile(PChar('ExtractProcTemplate.pas'), PChar(Dir + 'kernel\client\ClientPack\ExtractProcTemplate.pas'), false);
-  CopyFile(PChar('..\DataShower\uDocInfo.pas'), PChar(Dir + 'kernel\client\ClientPack\uDocInfo.pas'), false);
-  CopyFile(PChar('..\DataShower\uInfoForm.pas'), PChar(Dir + 'kernel\client\ClientPack\uInfoForm.pas'), false);
-  CopyFile(PChar('..\DataShower\uInfoForm.dfm'), PChar(Dir + 'kernel\client\ClientPack\uInfoForm.dfm'), false);
-
-  Result := True;
-end;
-
-function TMainForm.Compile(Dir: string): Boolean;
-var
-  FileName: string;
-  Params: string;
-begin
-  Result := False;
-  Dir := Dir + 'kernel\Client\Make\';
-  FileName := Dir + 'ClientPack';
-  if FileExists(FileName + '.cfg') then
-    Params := ''
-  else
-  begin
-    Params := ' -AMainTLB=MainController_TLB' +
-              ' -I"..\shared"' +
-              ' -U"..\..\..\.compile\client"' +
-              ' -O"..\..\..\.compile\client"' +
-              ' -I"..\..\..\.compile\client"' +
-              ' -R"..\..\..\.compile\client"' +
-              ' -N"..\..\..\.compile\client\ClientPack"' +
-              ' -LE"..\..\..\build\client"' +
-              ' -LN"..\..\..\.compile\client"' +
-              ' -LUEhLib;az_lib_rt;KerPack;rtl';
-  end;
-  ShellExecute(Self.Handle, PChar('open'), PChar('dcc32.exe'), PChar(Params + ' ' + FileName + '.dpk'), PChar(Dir), 0);
-  Result := True;
-end;
-
-procedure TMainForm.btnGoClick(Sender: TObject);
-begin
-  if Path(edProject.Text) then
-    Compile(edProject.Text);
-end;
-
-procedure TMainForm.Edit1KeyUp(Sender: TObject; var Key: Word;
-  Shift: TShiftState);
 var
   i: Integer;
-  text: PWideChar;
-  str1,str2: string;
 begin
-  str1 := Edit1.Text;
-  if str1 = '' then Exit;
-  GetMem(text, 2*(Length(str1)+1));
-  StringToWideChar(str1, text, Length(str1)+1);
-  str2 := '';
-  for i := 1 to Length(str1) do
+  TreeList.Items.Clear();
+  for i := 0 to FProjects.Count - 1 do
   begin
-    str2 := str2 + '#' + IntToStr(Word(text^));
-    Inc(text);
+    AddProjectToTree(TProjectInfo(FProjects.Items[i]));
   end;
-  Edit2.Text := str2;
+end;
+
+procedure TMainForm.edtFilterChange(Sender: TObject);
+begin
+  if chbAutoApply.Checked then
+    actApplyFilterExecute(Sender);
+end;
+
+procedure TMainForm.FormCreate(Sender: TObject);
+begin
+  FProjects := TList.Create();
+end;
+
+procedure TMainForm.FormDestroy(Sender: TObject);
+var
+  i: Integer;
+begin
+  for i := 0 to FProjects.Count - 1 do
+  try
+    TObject(FProjects.Items[i]).Free();
+  except
+  end;
+  FProjects.Free();
+end;
+
+procedure TMainForm.actApplyFilterExecute(Sender: TObject);
+var
+  i: Integer;
+  Filter: string;
+begin
+  Filter := edtFilter.Text;
+  for i := 0 to FProjects.Count - 1 do
+  begin
+    TProjectInfo(FProjects.Items[i]).ApplyFilter(Filter);
+  end;
+  BuildTree();
+  TreeList.FullExpand();
+end;
+
+procedure TMainForm.actAutoApplyExecute(Sender: TObject);
+begin
+  if chbAutoApply.Checked then
+    actApplyFilterExecute(Sender);
+end;
+
+procedure TMainForm.actExecuteFileExecute(Sender: TObject);
+var
+  Node: TTreeNode;
+  Project: TProjectInfo;
+  Str,
+  ProjectRootDir: string;
+begin
+  Node := TreeList.Selected;
+  if not Assigned(Node) then Exit;
+
+  if Assigned(Node.Parent) then
+    Project := TProjectInfo(Node.Parent.Data)
+  else
+    Project := TProjectInfo(Node.Data);
+
+  if Assigned(Project) then
+  begin
+    if not Assigned(Node.Parent) then
+    begin
+      Str := Project.ProjectFileName
+    end
+    else
+    begin
+      ProjectRootDir := ExtractFilePath(Project.ProjectFileName);
+      Str := ProjectRootDir + TreeList.GetNodeColumn(Node, 1);
+    end;
+    ShellExecute(Self.Handle, PChar('open'), PChar(Str), nil, nil, 0);
+  end;
+end;
+
+procedure TMainForm.actOpenProjectExecute(Sender: TObject);
+var
+  i: Integer;
+  ProjectsFiles: TStrings;
+  Path,
+  Name, Value: string;
+begin
+  if not OpenDialog.Execute() then Exit;
+
+  OpenBPG(OpenDialog.FileName);
+  BuildTree();
+  StatusBar.SimpleText := OpenDialog.FileName;
+end;
+
+procedure TMainForm.actShowAboutExecute(Sender: TObject);
+begin
+  AboutFrm.ShowModal();
 end;
 
 end.

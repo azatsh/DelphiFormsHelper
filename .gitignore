@@ -1,4 +1,7 @@
 
+.gitignore
+__history
 *.exe
 *.dcu
+*.res
 *.~*

@@ -1,76 +1,201 @@
 object MainForm: TMainForm
-  Left = 205
-  Top = 141
-  Width = 598
-  Height = 427
-  Caption = 'MainForm'
+  Left = 0
+  Top = 0
+  ClientHeight = 513
+  ClientWidth = 516
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -11
-  Font.Name = 'MS Sans Serif'
+  Font.Name = 'Tahoma'
   Font.Style = []
   OldCreateOrder = False
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  DesignSize = (
+    516
+    513)
   PixelsPerInch = 96
   TextHeight = 13
-  object Label1: TLabel
-    Left = 24
-    Top = 16
-    Width = 37
-    Height = 13
-    Caption = #1055#1088#1086#1077#1082#1090
+  object btnApply: TSpeedButton
+    Left = 327
+    Top = 48
+    Width = 50
+    Height = 22
+    Action = actApplyFilter
   end
-  object edProject: TEdit
-    Left = 24
-    Top = 40
-    Width = 121
-    Height = 21
+  object TreeList: TTreeList
+    Left = 8
+    Top = 90
+    Width = 497
+    Height = 390
+    Anchors = [akLeft, akTop, akRight, akBottom]
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -19
+    Font.Name = 'Courier'
+    Font.Style = []
+    HideSelection = False
+    Indent = 19
+    ParentFont = False
+    PopupMenu = PopupMenu
+    ReadOnly = True
+    RightClickSelect = True
+    RowSelect = True
     TabOrder = 0
-    Text = 'E:\Work\Projects\gzroot\'
+    ToolTips = False
+    Visible = True
+    Columns = <
+      item
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -13
+        Font.Name = 'Arial'
+        Font.Style = [fsBold]
+        Header = 'Project'
+        Width = 150
+      end
+      item
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -13
+        Font.Name = 'Tahoma'
+        Font.Style = []
+        Header = 'File'
+        Width = 150
+      end
+      item
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -13
+        Font.Name = 'Tahoma'
+        Font.Style = []
+        Header = 'Form'
+        Width = 80
+      end
+      item
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -13
+        Font.Name = 'Tahoma'
+        Font.Style = []
+        Header = 'FormCaption'
+        Width = 50
+      end>
+    ColumnLines = True
+    Separator = ';'
+    ItemHeight = 18
+    HeaderSettings.AllowResize = True
+    HeaderSettings.Color = clBtnFace
+    HeaderSettings.Font.Charset = DEFAULT_CHARSET
+    HeaderSettings.Font.Color = clWindowText
+    HeaderSettings.Font.Height = -11
+    HeaderSettings.Font.Name = 'Tahoma'
+    HeaderSettings.Font.Style = []
+    HeaderSettings.Height = 18
+    Version = '1.0.1.6'
   end
-  object btnOpenProject: TButton
-    Left = 160
-    Top = 40
-    Width = 41
-    Height = 25
-    Caption = '...'
-    TabOrder = 1
-    OnClick = btnOpenProjectClick
+  object edtFilter: TLabeledEdit
+    Left = 8
+    Top = 48
+    Width = 313
+    Height = 21
+    EditLabel.Width = 24
+    EditLabel.Height = 13
+    EditLabel.Caption = 'Filter'
+    TabOrder = 2
+    OnChange = edtFilterChange
+  end
+  object chbAutoApply: TCheckBox
+    Left = 391
+    Top = 50
+    Width = 74
+    Height = 17
+    Action = actAutoApply
+    TabOrder = 3
+  end
+  object ToolBar: TToolBar
+    Left = 0
+    Top = 0
+    Width = 516
+    Height = 19
+    AutoSize = True
+    ButtonHeight = 19
+    ButtonWidth = 51
+    Caption = 'ToolBar'
+    List = True
+    Menu = MainMenu
+    ShowCaptions = True
+    TabOrder = 4
   end
   object StatusBar: TStatusBar
     Left = 0
-    Top = 374
-    Width = 590
+    Top = 494
+    Width = 516
     Height = 19
     Panels = <>
+    SimplePanel = True
+    ExplicitLeft = 264
+    ExplicitTop = 312
+    ExplicitWidth = 0
   end
-  object btnGo: TButton
-    Left = 40
-    Top = 96
-    Width = 75
-    Height = 25
-    Caption = #1055#1072#1090#1095#1080#1090#1100
-    TabOrder = 3
-    OnClick = btnGoClick
-  end
-  object Edit1: TEdit
+  object OpenDialog: TOpenDialog
+    Filter = 'Borland project group|*.bpg'
     Left = 224
-    Top = 40
-    Width = 121
-    Height = 21
-    TabOrder = 4
-    Text = 'Edit1'
-    Visible = False
-    OnKeyUp = Edit1KeyUp
+    Top = 144
   end
-  object Edit2: TEdit
-    Left = 224
-    Top = 64
-    Width = 121
-    Height = 21
-    TabOrder = 5
-    Text = 'Edit1'
-    Visible = False
-    OnKeyUp = Edit1KeyUp
+  object ActionList: TActionList
+    Left = 312
+    Top = 144
+    object actApplyFilter: TAction
+      Caption = 'apply'
+      OnExecute = actApplyFilterExecute
+    end
+    object actExecuteFile: TAction
+      Caption = 'Open'
+      OnExecute = actExecuteFileExecute
+    end
+    object actAutoApply: TAction
+      Caption = 'auto apply'
+      OnExecute = actAutoApplyExecute
+    end
+    object actOpenProject: TAction
+      Caption = 'Open'
+      OnExecute = actOpenProjectExecute
+    end
+    object actShowAbout: TAction
+      Caption = 'About'
+      OnExecute = actShowAboutExecute
+    end
+  end
+  object MainMenu: TMainMenu
+    Left = 264
+    Top = 144
+    object N1: TMenuItem
+      Caption = 'File'
+      object Open1: TMenuItem
+        Action = actOpenProject
+      end
+    end
+    object Settings1: TMenuItem
+      Caption = 'Settings'
+    end
+    object About1: TMenuItem
+      AutoCheck = True
+      Caption = 'Help'
+      object About2: TMenuItem
+        Action = actShowAbout
+      end
+    end
+  end
+  object PopupMenu: TPopupMenu
+    Left = 368
+    Top = 144
+    object Open2: TMenuItem
+      Action = actExecuteFile
+    end
+    object View1: TMenuItem
+      Caption = 'View'
+    end
   end
 end
